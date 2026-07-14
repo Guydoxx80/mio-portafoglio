@@ -111,10 +111,13 @@ function App() {
         }
 
         if (!cloudPortfolio) {
+          const dedupedTrades = dedupeTrades(latestTradesRef.current);
           await saveCloudPortfolio(activeSession, {
-            trades: latestTradesRef.current,
+            trades: dedupedTrades,
             snapshots: loadPortfolioSnapshots(),
           });
+          saveTrades(dedupedTrades);
+          setTrades(dedupedTrades);
           if (!cancelled) {
             setCloudReady(true);
             setSyncStatus("Cloud inizializzato.");
@@ -215,9 +218,9 @@ function App() {
 
   function handleSaveTrade(trade: Trade): void {
     const exists = trades.some((currentTrade) => currentTrade.id === trade.id);
-    const nextTrades = exists
+    const nextTrades = dedupeTrades(exists
       ? trades.map((currentTrade) => (currentTrade.id === trade.id ? trade : currentTrade))
-      : [trade, ...trades];
+      : [trade, ...trades]);
 
     setTrades(nextTrades);
     upsertPortfolioSnapshots(nextTrades);
@@ -241,12 +244,16 @@ function App() {
       return;
     }
 
-    setTrades((currentTrades) => currentTrades.filter((trade) => trade.id !== tradeId));
+    setTrades((currentTrades) => {
+      const nextTrades = currentTrades.filter((trade) => trade.id !== tradeId);
+      void syncPortfolioToCloud(nextTrades);
+      return nextTrades;
+    });
   }
 
   function handleChangeStatus(tradeId: string, status: TradeStatus): void {
-    setTrades((currentTrades) =>
-      currentTrades.map((trade) =>
+    setTrades((currentTrades) => {
+      const nextTrades = dedupeTrades(currentTrades.map((trade) =>
         trade.id === tradeId
           ? {
               ...trade,
@@ -255,8 +262,10 @@ function App() {
               updatedAt: new Date().toISOString(),
             }
           : trade,
-      ),
-    );
+      ));
+      void syncPortfolioToCloud(nextTrades);
+      return nextTrades;
+    });
   }
 
   async function handleRefreshPrices(): Promise<void> {
@@ -318,8 +327,10 @@ function App() {
 
     try {
       setSyncStatus("Salvataggio cloud...");
+      const dedupedTrades = dedupeTrades(nextTrades);
+      saveTrades(dedupedTrades);
       await saveCloudPortfolio(currentSession, {
-        trades: nextTrades,
+        trades: dedupedTrades,
         snapshots: loadPortfolioSnapshots(),
       });
       setSyncStatus("Cloud salvato.");
@@ -424,24 +435,44 @@ function sortableValue(trade: Trade, sortKey: SortKey): string | number {
 }
 
 function mergeTrades(localTrades: Trade[], cloudTrades: Trade[]): Trade[] {
+  return dedupeTrades([...cloudTrades, ...localTrades]);
+}
+
+function dedupeTrades(tradesToDedupe: Trade[]): Trade[] {
   const mergedTrades = new Map<string, Trade>();
 
-  for (const trade of [...cloudTrades, ...localTrades]) {
-    const key = trade.id || tradeSignature(trade);
+  for (const trade of tradesToDedupe) {
+    const key = tradeSignature(trade);
     const existingTrade = mergedTrades.get(key);
-    if (!existingTrade) {
-      mergedTrades.set(key, trade);
-      continue;
-    }
-
-    const existingUpdatedAt = Date.parse(existingTrade.updatedAt || existingTrade.createdAt || "");
-    const nextUpdatedAt = Date.parse(trade.updatedAt || trade.createdAt || "");
-    if (nextUpdatedAt >= existingUpdatedAt) {
-      mergedTrades.set(key, trade);
-    }
+    mergedTrades.set(key, existingTrade ? pickBestTrade(existingTrade, trade) : trade);
   }
 
   return Array.from(mergedTrades.values()).sort((a, b) => Date.parse(b.openDate) - Date.parse(a.openDate));
+}
+
+function pickBestTrade(firstTrade: Trade, secondTrade: Trade): Trade {
+  if (firstTrade.status !== secondTrade.status) {
+    if (secondTrade.status === "closed") {
+      return secondTrade;
+    }
+
+    if (firstTrade.status === "closed") {
+      return firstTrade;
+    }
+  }
+
+  const firstUpdatedAt = Date.parse(firstTrade.updatedAt || firstTrade.createdAt || "");
+  const secondUpdatedAt = Date.parse(secondTrade.updatedAt || secondTrade.createdAt || "");
+
+  if (Number.isNaN(firstUpdatedAt)) {
+    return secondTrade;
+  }
+
+  if (Number.isNaN(secondUpdatedAt)) {
+    return firstTrade;
+  }
+
+  return secondUpdatedAt >= firstUpdatedAt ? secondTrade : firstTrade;
 }
 
 function mergeSnapshots(localSnapshots: unknown[], cloudSnapshots: unknown[]): unknown[] {
@@ -458,7 +489,16 @@ function mergeSnapshots(localSnapshots: unknown[], cloudSnapshots: unknown[]): u
 }
 
 function tradeSignature(trade: Trade): string {
-  return [trade.ticker, trade.openDate, trade.entryPrice, trade.quantity].join("|");
+  return [
+    trade.ticker.toUpperCase(),
+    trade.openDate.slice(0, 10),
+    normalizeNumberForSignature(trade.entryPrice),
+    normalizeNumberForSignature(trade.quantity),
+  ].join("|");
+}
+
+function normalizeNumberForSignature(value: number): string {
+  return Number(value).toFixed(4);
 }
 
 function snapshotKey(snapshot: unknown): string {
