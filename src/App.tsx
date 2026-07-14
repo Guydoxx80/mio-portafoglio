@@ -126,7 +126,7 @@ function App() {
           return;
         }
 
-        const mergedTrades = mergeTrades(latestTradesRef.current, cloudPortfolio.trades);
+        const mergedTrades = dedupeTrades(cloudPortfolio.trades);
         const mergedSnapshots = mergeSnapshots(loadPortfolioSnapshots(), cloudPortfolio.snapshots);
 
         saveTrades(mergedTrades);
