@@ -1,0 +1,15 @@
+node_modules/
+dist/
+Apri App.html
+Apri App.url
+*.lnk
+public/Apri App.html
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+*.log
+.DS_Store
+Thumbs.db
+portfolio-*.xls
+*.ods
