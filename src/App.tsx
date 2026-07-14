@@ -31,7 +31,8 @@ type FilterStrategy = Strategy | "Tutte";
 type FilterSector = Sector | "Tutti";
 
 function App() {
-  const [trades, setTrades] = useState<Trade[]>(() => loadTrades(demoTrades));
+  const supabaseConfigured = isSupabaseConfigured();
+  const [trades, setTrades] = useState<Trade[]>(() => loadTrades(supabaseConfigured ? [] : demoTrades));
   const [activeStatus, setActiveStatus] = useState<TradeStatus>("open");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStrategy, setSelectedStrategy] = useState<FilterStrategy>("Tutte");
@@ -345,6 +346,32 @@ function App() {
     minute: "2-digit",
   });
 
+  if (supabaseConfigured && !session) {
+    return (
+      <div className={`min-h-screen ${isDarkTheme ? "theme-dark" : ""}`}>
+        <main className="flex min-h-screen items-center justify-center px-4 py-10">
+          <section className="w-full max-w-3xl space-y-5">
+            <div className="space-y-2 text-center">
+              <h1 className="text-3xl font-bold text-ink">Mio Portafoglio</h1>
+              <p className="text-sm text-muted">Accesso riservato. Effettua il login per visualizzare i trade.</p>
+            </div>
+            <AuthPanel
+              allowSignup={false}
+              configured={supabaseConfigured}
+              errorMessage={authError}
+              loading={authLoading}
+              onLogin={handleLogin}
+              onLogout={handleLogout}
+              onSignup={handleSignup}
+              session={session}
+              syncStatus={syncStatus}
+            />
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen ${isDarkTheme ? "theme-dark" : ""}`}>
       <Header
@@ -357,7 +384,7 @@ function App() {
       />
       <main className="mx-auto max-w-[1920px] space-y-6 px-4 py-5 sm:px-6 lg:px-8">
         <AuthPanel
-          configured={isSupabaseConfigured()}
+          configured={supabaseConfigured}
           errorMessage={authError}
           loading={authLoading}
           onLogin={handleLogin}

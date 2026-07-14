@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { SupabaseSession } from "../lib/supabaseClient";
 
 type AuthPanelProps = {
+  allowSignup?: boolean;
   configured: boolean;
   errorMessage: string;
   loading: boolean;
@@ -14,6 +15,7 @@ type AuthPanelProps = {
 };
 
 export function AuthPanel({
+  allowSignup = true,
   configured,
   errorMessage,
   loading,
@@ -105,17 +107,19 @@ export function AuthPanel({
           <LogIn size={15} />
           Login
         </button>
-        <button
-          className="inline-flex h-10 items-center gap-2 rounded-md border border-line px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={loading || !email || !password}
-          onClick={() => {
-            void submit("signup");
-          }}
-          type="button"
-        >
-          <UserPlus size={15} />
-          Crea account
-        </button>
+        {allowSignup ? (
+          <button
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-line px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={loading || !email || !password}
+            onClick={() => {
+              void submit("signup");
+            }}
+            type="button"
+          >
+            <UserPlus size={15} />
+            Crea account
+          </button>
+        ) : null}
       </div>
       <div className="mt-2 min-h-5 text-xs text-muted">
         {errorMessage ? <span className="text-red-600">{errorMessage}</span> : syncStatus || "Offline/local-first finche non fai login."}
