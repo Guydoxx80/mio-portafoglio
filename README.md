@@ -93,3 +93,4 @@ Al login, l'app unisce i dati locali con quelli cloud e poi salva automaticament
 
 5. Fai `Deploy`.
 
+Deploy update
