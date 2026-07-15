@@ -1,4 +1,4 @@
-import { Activity, ChartNoAxesColumnIncreasing, CircleGauge, PieChart, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, ChevronUp, CircleGauge, PieChart, Settings, Wallet } from "lucide-react";
 import { calculateProfitLoss } from "../lib/calculations";
 import { formatMoney, formatPercent } from "../lib/formatters";
 import type { Sector, Trade } from "../types";
@@ -7,6 +7,9 @@ import type { VisualView } from "./Header";
 import { RiskDashboard } from "./RiskDashboard";
 import { StatCard } from "./StatCard";
 import { TitlesDonutChart } from "./TitlesDonutChart";
+
+const INITIAL_CAPITAL = 20000;
+const MAX_TRADE_RISK = 1000;
 
 const sectorColors: Record<Sector, string> = {
   Technology: "#7c83f4",
@@ -32,14 +35,35 @@ type DashboardProps = {
 
 export function Dashboard({ activeView, trades }: DashboardProps) {
   const openTrades = trades.filter((trade) => trade.status === "open");
+  const closedTrades = trades.filter((trade) => trade.status === "closed");
   const investedCapital = openTrades.reduce((sum, trade) => sum + trade.entryPrice * trade.quantity, 0);
-  const currentCapital = openTrades.reduce((sum, trade) => sum + trade.currentPrice * trade.quantity, 0);
   const profitLoss = openTrades.reduce((sum, trade) => {
     return sum + calculateProfitLoss(trade.entryPrice, trade.currentPrice, trade.quantity).euro;
   }, 0);
+  const realizedProfitLoss = closedTrades.reduce((sum, trade) => {
+    return sum + calculateProfitLoss(trade.entryPrice, trade.currentPrice, trade.quantity).euro;
+  }, 0);
+  const totalProfitLoss = profitLoss + realizedProfitLoss;
   const riskExposed = openTrades.reduce((sum, trade) => sum + trade.riskEuro, 0);
-  const buyingPower = Math.max(0, 20000 - investedCapital);
-  const leverage = investedCapital > 0 ? currentCapital / Math.max(investedCapital, 1) : 0;
+  const buyingPower = INITIAL_CAPITAL - investedCapital;
+  const leverage = investedCapital / INITIAL_CAPITAL;
+  const accountBalance = INITIAL_CAPITAL + profitLoss;
+  const riskPercent = (riskExposed / INITIAL_CAPITAL) * 100;
+  const profitLossPercent = investedCapital ? (profitLoss / investedCapital) * 100 : 0;
+  const realizedProfitLossPercent = INITIAL_CAPITAL ? (realizedProfitLoss / INITIAL_CAPITAL) * 100 : 0;
+  const totalProfitLossPercent = INITIAL_CAPITAL ? (totalProfitLoss / INITIAL_CAPITAL) * 100 : 0;
+  const alertCount = [buyingPower < 0, riskExposed > MAX_TRADE_RISK, leverage > 1].filter(Boolean).length;
+
+  const dailyTrades = openTrades.map((trade) => {
+    const previousPrice = trade.dailyOpen ?? trade.dailyClose ?? trade.currentPrice;
+    const currentPrice = trade.dailyClose ?? trade.currentPrice;
+    return {
+      trade,
+      dailyProfitLoss: (currentPrice - previousPrice) * trade.quantity,
+    };
+  });
+  const dailyProfitLoss = dailyTrades.reduce((sum, item) => sum + item.dailyProfitLoss, 0);
+  const dailyProfitLossPercent = investedCapital ? (dailyProfitLoss / investedCapital) * 100 : 0;
 
   const sectorData = Object.entries(
     openTrades.reduce<Record<string, { value: number; positions: number; profitLoss: number }>>((groups, trade) => {
@@ -64,12 +88,8 @@ export function Dashboard({ activeView, trades }: DashboardProps) {
     }))
     .sort((a, b) => b.value - a.value);
 
-  const bestTrade = openTrades
-    .map((trade) => ({ trade, pl: calculateProfitLoss(trade.entryPrice, trade.currentPrice, trade.quantity).euro }))
-    .sort((a, b) => b.pl - a.pl)[0];
-  const worstTrade = openTrades
-    .map((trade) => ({ trade, pl: calculateProfitLoss(trade.entryPrice, trade.currentPrice, trade.quantity).euro }))
-    .sort((a, b) => a.pl - b.pl)[0];
+  const bestTrade = [...dailyTrades].sort((a, b) => b.dailyProfitLoss - a.dailyProfitLoss)[0];
+  const worstTrade = [...dailyTrades].sort((a, b) => a.dailyProfitLoss - b.dailyProfitLoss)[0];
 
   if (activeView === "risk") {
     return <RiskDashboard trades={trades} />;
@@ -82,83 +102,121 @@ export function Dashboard({ activeView, trades }: DashboardProps) {
       </div>
 
       <aside className="min-w-0 space-y-4">
-        <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 shadow-line">
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
-            <Activity aria-hidden="true" className="h-4 w-4" />
+        <section className="rounded-[14px] border border-emerald-200 bg-emerald-50 p-4 shadow-line">
+          <div className="flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-slate-700">
+            <Activity aria-hidden="true" className="h-4 w-4 text-emerald-600" />
             P/L GIORNALIERO
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <p className={`text-2xl font-semibold ${profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-              {profitLoss >= 0 ? "+" : ""}
-              {formatMoney(profitLoss)}
+            <p className={`font-mono text-2xl font-bold ${dailyProfitLoss >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+              {signedMoney(dailyProfitLoss)}
             </p>
-            <span className="rounded-md bg-emerald-100 px-2 py-1 text-sm font-bold text-emerald-700">
-              {formatPercent(investedCapital ? (profitLoss / investedCapital) * 100 : 0)}
+            <span
+              className={`rounded-lg px-3 py-1 font-mono text-sm font-bold ${
+                dailyProfitLoss >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+              }`}
+            >
+              {formatPercent(dailyProfitLossPercent)}
             </span>
           </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-100 pt-3 text-xs text-slate-500">
             <span>
               Best <b className="text-emerald-700">{bestTrade?.trade.ticker ?? "-"}</b>{" "}
-              <span className="text-emerald-700">{bestTrade ? formatMoney(bestTrade.pl) : formatMoney(0)}</span>
+              <span className="font-mono text-emerald-700">
+                {bestTrade ? signedMoney(bestTrade.dailyProfitLoss) : formatMoney(0)}
+              </span>
             </span>
             <span>
               Worst <b className="text-red-700">{worstTrade?.trade.ticker ?? "-"}</b>{" "}
-              <span className="text-red-700">{worstTrade ? formatMoney(worstTrade.pl) : formatMoney(0)}</span>
+              <span className="font-mono text-red-700">{worstTrade ? signedMoney(worstTrade.dailyProfitLoss) : formatMoney(0)}</span>
             </span>
           </div>
         </section>
 
-        <StatCard title="Panoramica Portfolio" icon={<PieChart aria-hidden="true" className="h-4 w-4" />}>
-          <div className="space-y-3 text-sm">
-            <Row label="Saldo corrente" value={formatMoney(currentCapital + buyingPower)} />
-            <Row label="Capitale iniziale" value={formatMoney(20000)} muted />
-            <Row
-              label="P/L Non Realizzato"
-              value={`${profitLoss >= 0 ? "+" : ""}${formatMoney(profitLoss)} (${formatPercent(
-                investedCapital ? (profitLoss / investedCapital) * 100 : 0,
-              )})`}
-              tone={profitLoss >= 0 ? "positive" : "negative"}
-            />
-            <div>
+        <StatCard title="Panoramica Portfolio" icon={<PieChart aria-hidden="true" className="h-5 w-5" />}>
+          <div className="space-y-4 text-sm">
+            <div className="space-y-1">
+              <p className="font-mono text-xs uppercase tracking-[0.18em] text-slate-400">Saldo corrente</p>
+              <p className="text-right font-mono text-2xl font-bold text-ink">{formatMoney(accountBalance)}</p>
+            </div>
+
+            <div className="space-y-1">
+              <Row label="Capitale versato" value={formatMoney(INITIAL_CAPITAL)} muted />
+              <Row
+                label="P/L Non Realizzato"
+                value={`${signedMoney(profitLoss)} (${formatPercent(profitLossPercent)})`}
+                tone={profitLoss >= 0 ? "positive" : "negative"}
+              />
+              <Row
+                label="P/L Realizzato"
+                value={`${signedMoney(realizedProfitLoss)} (${formatPercent(realizedProfitLossPercent)})`}
+                tone={realizedProfitLoss >= 0 ? "positive" : "negative"}
+              />
+            </div>
+
+            <div className="border-t border-line pt-1">
+              <Row
+                label="P/L Totale"
+                value={`${signedMoney(totalProfitLoss)} (${formatPercent(totalProfitLossPercent)})`}
+                tone={totalProfitLoss >= 0 ? "positive" : "negative"}
+                strong
+              />
+            </div>
+
+            <div className="space-y-2 pt-2">
               <Row label="Esposizione al rischio" value={formatMoney(riskExposed)} />
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-emerald-500"
-                  style={{ width: `${Math.min((riskExposed / 20000) * 100, 100)}%` }}
-                />
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(riskPercent, 100)}%` }} />
               </div>
-              <div className="mt-1 flex justify-between text-xs text-slate-500">
-                <span>{((riskExposed / 20000) * 100).toFixed(1)}% del capitale</span>
-                <span>Max/Trade: {formatMoney(1000)}</span>
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>{riskPercent.toFixed(1)}% del capitale</span>
+                <span>Max/Trade: {formatMoney(MAX_TRADE_RISK)}</span>
               </div>
             </div>
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-              Nessun alert, tutto nella norma
+
+            {alertCount > 0 ? (
+              <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-600">
+                <span className="inline-flex items-center gap-2">
+                  <AlertTriangle aria-hidden="true" className="h-4 w-4" />
+                  {alertCount} Alert Attivi
+                </span>
+                <span>Vai →</span>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                Nessun alert, tutto nella norma
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-50 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                type="button"
+              >
+                <Settings aria-hidden="true" className="h-4 w-4" />
+                Impostazioni
+              </button>
+              <button
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-50 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                type="button"
+              >
+                <Wallet aria-hidden="true" className="h-4 w-4" />
+                Capitale
+              </button>
             </div>
           </div>
         </StatCard>
 
-        <StatCard title="Stats Rapide" icon={<CircleGauge aria-hidden="true" className="h-4 w-4" />}>
-          <div className="space-y-3 text-sm">
+        <StatCard title="Stats Rapide" icon={<CircleGauge aria-hidden="true" className="h-5 w-5" />}>
+          <div className="space-y-4 text-sm">
             <Row label="Rischio Esposto" value={formatMoney(riskExposed)} />
             <Row label="P/L Corrente" value={formatMoney(profitLoss)} tone={profitLoss >= 0 ? "positive" : "negative"} />
-            <div className="border-t border-line pt-3">
+            <div className="border-t border-line pt-4">
               <Row label="Capitale Investito" value={formatMoney(investedCapital)} />
             </div>
-            <Row label="Buying Power" value={formatMoney(buyingPower)} tone="positive" />
+            <Row label="Buying Power" value={formatMoney(buyingPower)} tone={buyingPower >= 0 ? "positive" : "negative"} />
             <Row label="Leverage" value={`${leverage.toFixed(2)}x / 1x`} tone={leverage <= 1 ? "positive" : "negative"} />
           </div>
-        </StatCard>
-
-        <StatCard
-          title="Metriche Avanzate"
-          icon={<ChartNoAxesColumnIncreasing aria-hidden="true" className="h-4 w-4" />}
-          collapsed
-        >
-          <span />
-        </StatCard>
-        <StatCard title="Performance" icon={<ShieldCheck aria-hidden="true" className="h-4 w-4" />} collapsed>
-          <span />
         </StatCard>
       </aside>
     </section>
@@ -170,15 +228,22 @@ type RowProps = {
   value: string;
   muted?: boolean;
   tone?: "positive" | "negative";
+  strong?: boolean;
 };
 
-function Row({ label, value, muted, tone }: RowProps) {
+function Row({ label, value, muted, tone, strong }: RowProps) {
   const toneClass = tone === "positive" ? "text-emerald-600" : tone === "negative" ? "text-red-600" : "text-ink";
 
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className={`text-xs ${muted ? "text-slate-400" : "text-slate-600"}`}>{label}</span>
-      <span className={`text-right font-semibold ${toneClass}`}>{value}</span>
+      <span className={`${strong ? "text-sm font-bold" : "text-xs"} ${muted ? "text-slate-400" : "text-slate-600"}`}>
+        {label}
+      </span>
+      <span className={`text-right font-mono ${strong ? "text-sm font-bold" : "font-semibold"} ${toneClass}`}>{value}</span>
     </div>
   );
+}
+
+function signedMoney(value: number): string {
+  return `${value >= 0 ? "+" : ""}${formatMoney(value)}`;
 }
