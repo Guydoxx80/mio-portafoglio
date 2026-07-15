@@ -1,6 +1,7 @@
 import { Activity, AlertTriangle, CircleGauge, PieChart, Settings, Wallet } from "lucide-react";
 import { calculateProfitLoss } from "../lib/calculations";
 import { formatMoney, formatPercent } from "../lib/formatters";
+import type { TradeAlert } from "../lib/tradeAlerts";
 import type { PortfolioSettings, Sector, Trade } from "../types";
 import { DonutChart } from "./DonutChart";
 import type { VisualView } from "./Header";
@@ -27,13 +28,15 @@ const sectorColors: Record<Sector, string> = {
 
 type DashboardProps = {
   activeView: VisualView;
+  alerts: TradeAlert[];
+  onOpenAlerts: () => void;
   onOpenCapital: () => void;
   onOpenSettings: () => void;
   settings: PortfolioSettings;
   trades: Trade[];
 };
 
-export function Dashboard({ activeView, onOpenCapital, onOpenSettings, settings, trades }: DashboardProps) {
+export function Dashboard({ activeView, alerts, onOpenAlerts, onOpenCapital, onOpenSettings, settings, trades }: DashboardProps) {
   const openTrades = trades.filter((trade) => trade.status === "open");
   const closedTrades = trades.filter((trade) => trade.status === "closed");
   const totalCapital = settings.initialCapital + settings.capitalAdditions.reduce((sum, addition) => sum + addition.amount, 0);
@@ -54,7 +57,6 @@ export function Dashboard({ activeView, onOpenCapital, onOpenSettings, settings,
   const profitLossPercent = investedCapital ? (profitLoss / investedCapital) * 100 : 0;
   const realizedProfitLossPercent = totalCapital ? (realizedProfitLoss / totalCapital) * 100 : 0;
   const totalProfitLossPercent = totalCapital ? (totalProfitLoss / totalCapital) * 100 : 0;
-  const alertCount = [buyingPower < 0, riskExposed > maxTradeRisk, leverage > settings.maxLeverage].filter(Boolean).length;
 
   const dailyTrades = openTrades.map((trade) => {
     const previousPrice = trade.dailyOpen ?? trade.dailyClose ?? trade.currentPrice;
@@ -176,14 +178,18 @@ export function Dashboard({ activeView, onOpenCapital, onOpenSettings, settings,
               </div>
             </div>
 
-            {alertCount > 0 ? (
-              <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-600">
+            {alerts.length > 0 ? (
+              <button
+                className="flex w-full items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+                onClick={onOpenAlerts}
+                type="button"
+              >
                 <span className="inline-flex items-center gap-2">
                   <AlertTriangle aria-hidden="true" className="h-4 w-4" />
-                  {alertCount} Alert Attivi
+                  {alerts.length} Alert Attivi
                 </span>
-                <span>Vai →</span>
-              </div>
+                <span>Vai -&gt;</span>
+              </button>
             ) : (
               <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
                 Nessun alert, tutto nella norma

@@ -7,6 +7,7 @@ type FilterSector = Sector | "Tutti";
 
 type TradeTabsProps = {
   activeStatus: TradeStatus;
+  alertCount: number;
   counts: Record<TradeStatus, number>;
   searchQuery: string;
   selectedStrategy: FilterStrategy;
@@ -29,6 +30,7 @@ const tabs: Array<{ status: TradeStatus; label: string }> = [
 
 export function TradeTabs({
   activeStatus,
+  alertCount,
   counts,
   searchQuery,
   selectedStrategy,
@@ -51,7 +53,7 @@ export function TradeTabs({
           {tabs.map((tab) => (
             <button
               key={tab.status}
-              className={`h-10 shrink-0 rounded-lg px-4 text-sm font-bold transition ${
+              className={`relative h-10 shrink-0 rounded-lg px-4 text-sm font-bold transition ${
                 activeStatus === tab.status
                   ? "bg-black text-white shadow-line"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -60,6 +62,11 @@ export function TradeTabs({
               type="button"
             >
               {tab.label} ({counts[tab.status]})
+              {tab.status === "open" && alertCount > 0 ? (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {alertCount}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>

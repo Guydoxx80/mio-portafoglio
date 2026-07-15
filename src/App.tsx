@@ -5,6 +5,7 @@ import { Dashboard } from "./components/Dashboard";
 import { Header, type VisualView } from "./components/Header";
 import { NewTradeModal } from "./components/NewTradeModal";
 import { PortfolioSettingsModal } from "./components/PortfolioSettingsModal";
+import { TradeAlertsPanel } from "./components/TradeAlertsPanel";
 import { TradeTable } from "./components/TradeTable";
 import { TradeTabs } from "./components/TradeTabs";
 import { calculateProfitLoss } from "./lib/calculations";
@@ -18,6 +19,7 @@ import {
 import { autoRefreshDailyPricesIfNeeded, refreshDailyPrices } from "./lib/marketData";
 import { loadPortfolioSettings, savePortfolioSettings } from "./lib/settingsStorage";
 import { loadTrades, saveTrades } from "./lib/storage";
+import { buildTradeAlerts } from "./lib/tradeAlerts";
 import {
   fetchCloudPortfolio,
   isSupabaseConfigured,
@@ -47,6 +49,8 @@ function App() {
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [capitalModalOpen, setCapitalModalOpen] = useState(false);
+  const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
+  const [confirmedAlertKeys, setConfirmedAlertKeys] = useState<Set<string>>(() => new Set());
   const [portfolioSettings, setPortfolioSettings] = useState<PortfolioSettings>(() => loadPortfolioSettings());
   const [activeView, setActiveView] = useState<VisualView>("sector");
   const [isDarkTheme, setIsDarkTheme] = useState(() => localStorage.getItem("portfolio-theme") === "dark");
@@ -190,6 +194,11 @@ function App() {
   const existingTickers = useMemo(
     () => Array.from(new Set(trades.map((trade) => trade.ticker))).sort((a, b) => a.localeCompare(b)),
     [trades],
+  );
+
+  const activeAlerts = useMemo(
+    () => buildTradeAlerts(trades, portfolioSettings).filter((alert) => !confirmedAlertKeys.has(alert.key)),
+    [confirmedAlertKeys, portfolioSettings, trades],
   );
 
   const filteredTrades = useMemo(() => {
@@ -406,6 +415,11 @@ function App() {
 
         <Dashboard
           activeView={activeView}
+          alerts={activeAlerts}
+          onOpenAlerts={() => {
+            setActiveStatus("open");
+            setAlertsPanelOpen(true);
+          }}
           onOpenCapital={() => setCapitalModalOpen(true)}
           onOpenSettings={() => setSettingsModalOpen(true)}
           settings={portfolioSettings}
@@ -415,6 +429,7 @@ function App() {
         <div className="space-y-4">
           <TradeTabs
             activeStatus={activeStatus}
+            alertCount={activeAlerts.length}
             counts={counts}
             lastUpdatedLabel={lastUpdatedLabel}
             onNewTrade={handleNewTrade}
@@ -430,6 +445,15 @@ function App() {
             selectedSector={selectedSector}
             selectedStrategy={selectedStrategy}
           />
+
+          {alertsPanelOpen && activeStatus === "open" ? (
+            <TradeAlertsPanel
+              alerts={activeAlerts}
+              onConfirm={(alertKey) => {
+                setConfirmedAlertKeys((currentKeys) => new Set([...currentKeys, alertKey]));
+              }}
+            />
+          ) : null}
 
           <TradeTable
             onChangeStatus={handleChangeStatus}
