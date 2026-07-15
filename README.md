@@ -90,6 +90,6 @@ Al login, l'app unisce i dati locali con quelli cloud e poi salva automaticament
    VITE_SUPABASE_URL
    VITE_SUPABASE_PUBLISHABLE_KEY
    ```
-Deploy update
+
 5. Fai `Deploy`.
 
