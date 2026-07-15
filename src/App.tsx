@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthPanel } from "./components/AuthPanel";
+import { CapitalModal } from "./components/CapitalModal";
 import { Dashboard } from "./components/Dashboard";
 import { Header, type VisualView } from "./components/Header";
 import { NewTradeModal } from "./components/NewTradeModal";
+import { PortfolioSettingsModal } from "./components/PortfolioSettingsModal";
 import { TradeTable } from "./components/TradeTable";
 import { TradeTabs } from "./components/TradeTabs";
 import { calculateProfitLoss } from "./lib/calculations";
@@ -14,6 +16,7 @@ import {
   upsertPortfolioSnapshots,
 } from "./lib/excelExport";
 import { autoRefreshDailyPricesIfNeeded, refreshDailyPrices } from "./lib/marketData";
+import { loadPortfolioSettings, savePortfolioSettings } from "./lib/settingsStorage";
 import { loadTrades, saveTrades } from "./lib/storage";
 import {
   fetchCloudPortfolio,
@@ -25,7 +28,7 @@ import {
   signUpWithPassword,
   type SupabaseSession,
 } from "./lib/supabaseClient";
-import type { Sector, SortDirection, SortKey, Strategy, Trade, TradeStatus } from "./types";
+import type { PortfolioSettings, Sector, SortDirection, SortKey, Strategy, Trade, TradeStatus } from "./types";
 
 type FilterStrategy = Strategy | "Tutte";
 type FilterSector = Sector | "Tutti";
@@ -42,6 +45,9 @@ function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [capitalModalOpen, setCapitalModalOpen] = useState(false);
+  const [portfolioSettings, setPortfolioSettings] = useState<PortfolioSettings>(() => loadPortfolioSettings());
   const [activeView, setActiveView] = useState<VisualView>("sector");
   const [isDarkTheme, setIsDarkTheme] = useState(() => localStorage.getItem("portfolio-theme") === "dark");
   const [session, setSession] = useState<SupabaseSession | null>(() => loadStoredSession());
@@ -64,6 +70,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("portfolio-theme", isDarkTheme ? "dark" : "light");
   }, [isDarkTheme]);
+
+  useEffect(() => {
+    savePortfolioSettings(portfolioSettings);
+  }, [portfolioSettings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -394,7 +404,13 @@ function App() {
           syncStatus={syncStatus}
         />
 
-        <Dashboard activeView={activeView} trades={trades} />
+        <Dashboard
+          activeView={activeView}
+          onOpenCapital={() => setCapitalModalOpen(true)}
+          onOpenSettings={() => setSettingsModalOpen(true)}
+          settings={portfolioSettings}
+          trades={trades}
+        />
 
         <div className="space-y-4">
           <TradeTabs
@@ -436,6 +452,23 @@ function App() {
         onSave={handleSaveTrade}
         open={modalOpen}
         tradeToEdit={editingTrade}
+      />
+
+      <PortfolioSettingsModal
+        onClose={() => setSettingsModalOpen(false)}
+        onSave={(nextSettings) => {
+          setPortfolioSettings(nextSettings);
+          setSettingsModalOpen(false);
+        }}
+        open={settingsModalOpen}
+        settings={portfolioSettings}
+      />
+
+      <CapitalModal
+        onClose={() => setCapitalModalOpen(false)}
+        onSave={setPortfolioSettings}
+        open={capitalModalOpen}
+        settings={portfolioSettings}
       />
     </div>
   );

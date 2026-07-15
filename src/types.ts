@@ -75,6 +75,31 @@ export type SortKey =
 
 export type SortDirection = "asc" | "desc";
 
+export type PortfolioSettings = {
+  initialCapital: number;
+  maxTradeRisk: number;
+  portfolioDivisor: number;
+  maxLeverage: number;
+  alertThresholdPercent: number;
+  capitalAdditions: CapitalAddition[];
+};
+
+export type CapitalAddition = {
+  id: string;
+  amount: number;
+  date: string;
+  note: string;
+};
+
+export const DEFAULT_PORTFOLIO_SETTINGS: PortfolioSettings = {
+  initialCapital: 20000,
+  maxTradeRisk: 1000,
+  portfolioDivisor: 20,
+  maxLeverage: 1,
+  alertThresholdPercent: 3,
+  capitalAdditions: [],
+};
+
 export const STRATEGIES: Strategy[] = [
   "Strategia Volumi",
   "Cryptocurrencies",

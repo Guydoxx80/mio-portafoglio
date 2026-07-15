@@ -1,15 +1,12 @@
-import { Activity, AlertTriangle, ChevronUp, CircleGauge, PieChart, Settings, Wallet } from "lucide-react";
+import { Activity, AlertTriangle, CircleGauge, PieChart, Settings, Wallet } from "lucide-react";
 import { calculateProfitLoss } from "../lib/calculations";
 import { formatMoney, formatPercent } from "../lib/formatters";
-import type { Sector, Trade } from "../types";
+import type { PortfolioSettings, Sector, Trade } from "../types";
 import { DonutChart } from "./DonutChart";
 import type { VisualView } from "./Header";
 import { RiskDashboard } from "./RiskDashboard";
 import { StatCard } from "./StatCard";
 import { TitlesDonutChart } from "./TitlesDonutChart";
-
-const INITIAL_CAPITAL = 20000;
-const MAX_TRADE_RISK = 1000;
 
 const sectorColors: Record<Sector, string> = {
   Technology: "#7c83f4",
@@ -30,12 +27,17 @@ const sectorColors: Record<Sector, string> = {
 
 type DashboardProps = {
   activeView: VisualView;
+  onOpenCapital: () => void;
+  onOpenSettings: () => void;
+  settings: PortfolioSettings;
   trades: Trade[];
 };
 
-export function Dashboard({ activeView, trades }: DashboardProps) {
+export function Dashboard({ activeView, onOpenCapital, onOpenSettings, settings, trades }: DashboardProps) {
   const openTrades = trades.filter((trade) => trade.status === "open");
   const closedTrades = trades.filter((trade) => trade.status === "closed");
+  const totalCapital = settings.initialCapital + settings.capitalAdditions.reduce((sum, addition) => sum + addition.amount, 0);
+  const maxTradeRisk = settings.maxTradeRisk || (settings.portfolioDivisor > 0 ? totalCapital / settings.portfolioDivisor : 0);
   const investedCapital = openTrades.reduce((sum, trade) => sum + trade.entryPrice * trade.quantity, 0);
   const profitLoss = openTrades.reduce((sum, trade) => {
     return sum + calculateProfitLoss(trade.entryPrice, trade.currentPrice, trade.quantity).euro;
@@ -45,14 +47,14 @@ export function Dashboard({ activeView, trades }: DashboardProps) {
   }, 0);
   const totalProfitLoss = profitLoss + realizedProfitLoss;
   const riskExposed = openTrades.reduce((sum, trade) => sum + trade.riskEuro, 0);
-  const buyingPower = INITIAL_CAPITAL - investedCapital;
-  const leverage = investedCapital / INITIAL_CAPITAL;
-  const accountBalance = INITIAL_CAPITAL + profitLoss;
-  const riskPercent = (riskExposed / INITIAL_CAPITAL) * 100;
+  const buyingPower = totalCapital * settings.maxLeverage - investedCapital;
+  const leverage = investedCapital / totalCapital;
+  const accountBalance = totalCapital + profitLoss;
+  const riskPercent = (riskExposed / totalCapital) * 100;
   const profitLossPercent = investedCapital ? (profitLoss / investedCapital) * 100 : 0;
-  const realizedProfitLossPercent = INITIAL_CAPITAL ? (realizedProfitLoss / INITIAL_CAPITAL) * 100 : 0;
-  const totalProfitLossPercent = INITIAL_CAPITAL ? (totalProfitLoss / INITIAL_CAPITAL) * 100 : 0;
-  const alertCount = [buyingPower < 0, riskExposed > MAX_TRADE_RISK, leverage > 1].filter(Boolean).length;
+  const realizedProfitLossPercent = totalCapital ? (realizedProfitLoss / totalCapital) * 100 : 0;
+  const totalProfitLossPercent = totalCapital ? (totalProfitLoss / totalCapital) * 100 : 0;
+  const alertCount = [buyingPower < 0, riskExposed > maxTradeRisk, leverage > settings.maxLeverage].filter(Boolean).length;
 
   const dailyTrades = openTrades.map((trade) => {
     const previousPrice = trade.dailyOpen ?? trade.dailyClose ?? trade.currentPrice;
@@ -141,7 +143,7 @@ export function Dashboard({ activeView, trades }: DashboardProps) {
             </div>
 
             <div className="space-y-1">
-              <Row label="Capitale versato" value={formatMoney(INITIAL_CAPITAL)} muted />
+              <Row label="Capitale versato" value={formatMoney(totalCapital)} muted />
               <Row
                 label="P/L Non Realizzato"
                 value={`${signedMoney(profitLoss)} (${formatPercent(profitLossPercent)})`}
@@ -170,7 +172,7 @@ export function Dashboard({ activeView, trades }: DashboardProps) {
               </div>
               <div className="flex justify-between text-xs text-slate-400">
                 <span>{riskPercent.toFixed(1)}% del capitale</span>
-                <span>Max/Trade: {formatMoney(MAX_TRADE_RISK)}</span>
+                <span>Max/Trade: {formatMoney(maxTradeRisk)}</span>
               </div>
             </div>
 
@@ -191,6 +193,7 @@ export function Dashboard({ activeView, trades }: DashboardProps) {
             <div className="grid grid-cols-2 gap-2">
               <button
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-50 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                onClick={onOpenSettings}
                 type="button"
               >
                 <Settings aria-hidden="true" className="h-4 w-4" />
@@ -198,6 +201,7 @@ export function Dashboard({ activeView, trades }: DashboardProps) {
               </button>
               <button
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-50 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                onClick={onOpenCapital}
                 type="button"
               >
                 <Wallet aria-hidden="true" className="h-4 w-4" />
@@ -215,7 +219,11 @@ export function Dashboard({ activeView, trades }: DashboardProps) {
               <Row label="Capitale Investito" value={formatMoney(investedCapital)} />
             </div>
             <Row label="Buying Power" value={formatMoney(buyingPower)} tone={buyingPower >= 0 ? "positive" : "negative"} />
-            <Row label="Leverage" value={`${leverage.toFixed(2)}x / 1x`} tone={leverage <= 1 ? "positive" : "negative"} />
+            <Row
+              label="Leverage"
+              value={`${leverage.toFixed(2)}x / ${settings.maxLeverage}x`}
+              tone={leverage <= settings.maxLeverage ? "positive" : "negative"}
+            />
           </div>
         </StatCard>
       </aside>
