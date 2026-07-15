@@ -190,7 +190,7 @@ async function fetchDailyPrices(tickers: string[]): Promise<Map<string, DailyPri
 }
 
 async function fetchDailyPrice(ticker: string): Promise<DailyPrice | null> {
-  for (const provider of [fetchYahooDailyPrice, fetchYahooViaReaderDailyPrice, fetchStooqDailyPrice]) {
+  for (const provider of [fetchStooqDailyPrice, fetchYahooDailyPrice, fetchYahooViaReaderDailyPrice]) {
     try {
       const dailyPrice = await provider(ticker);
       if (dailyPrice) {
@@ -205,7 +205,7 @@ async function fetchDailyPrice(ticker: string): Promise<DailyPrice | null> {
 }
 
 async function fetchHistoricalDailyPrice(ticker: string, startDate: string, endDate: string): Promise<DailyPrice[]> {
-  for (const provider of [fetchYahooHistoricalDailyPrice, fetchYahooViaReaderHistoricalDailyPrice]) {
+  for (const provider of [fetchStooqHistoricalDailyPrice, fetchYahooHistoricalDailyPrice, fetchYahooViaReaderHistoricalDailyPrice]) {
     try {
       const prices = await provider(ticker, startDate, endDate);
       if (prices.length > 0) {
@@ -288,7 +288,7 @@ async function fetchYahooViaReaderHistoricalDailyPrice(
 }
 
 async function fetchStooqDailyPrice(ticker: string): Promise<DailyPrice | null> {
-  const response = await fetch(`https://stooq.com/q/d/l/?s=${encodeURIComponent(ticker.toLowerCase())}.us&i=d`);
+  const response = await fetch(stooqDailyUrl(ticker));
 
   if (!response.ok) {
     return null;
@@ -317,12 +317,61 @@ async function fetchStooqDailyPrice(ticker: string): Promise<DailyPrice | null> 
   };
 }
 
+async function fetchStooqHistoricalDailyPrice(ticker: string, startDate: string, endDate: string): Promise<DailyPrice[]> {
+  const response = await fetch(stooqDailyUrl(ticker, startDate, endDate));
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const rows = (await response.text()).trim().split(/\r?\n/).slice(1);
+  const prices: DailyPrice[] = [];
+
+  for (const row of rows) {
+    if (!row || row.startsWith("No data")) {
+      continue;
+    }
+
+    const [date, open, , , close] = row.split(",");
+    const openPrice = Number(open);
+    const closePrice = Number(close);
+
+    if (!date || Number.isNaN(openPrice) || Number.isNaN(closePrice) || date < startDate || date > endDate) {
+      continue;
+    }
+
+    prices.push({
+      ticker,
+      open: roundPrice(openPrice),
+      close: roundPrice(closePrice),
+      date,
+      source: "Stooq",
+    });
+  }
+
+  return prices;
+}
+
 function roundPrice(value: number): number {
   return Number(value.toFixed(2));
 }
 
 function yahooChartUrl(ticker: string): string {
   return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=10d&interval=1d`;
+}
+
+function stooqDailyUrl(ticker: string, startDate?: string, endDate?: string): string {
+  const params = new URLSearchParams({
+    s: `${ticker.toLowerCase()}.us`,
+    i: "d",
+  });
+
+  if (startDate && endDate) {
+    params.set("d1", startDate.replace(/-/g, ""));
+    params.set("d2", endDate.replace(/-/g, ""));
+  }
+
+  return `https://stooq.com/q/d/l/?${params.toString()}`;
 }
 
 function yahooChartHistoryUrl(ticker: string, startDate: string, endDate: string): string {
