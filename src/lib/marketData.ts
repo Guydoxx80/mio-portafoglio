@@ -190,7 +190,7 @@ async function fetchDailyPrices(tickers: string[]): Promise<Map<string, DailyPri
 }
 
 async function fetchDailyPrice(ticker: string): Promise<DailyPrice | null> {
-  for (const provider of [fetchStooqDailyPrice, fetchYahooDailyPrice, fetchYahooViaReaderDailyPrice]) {
+  for (const provider of [fetchYahooDailyPrice, fetchYahooViaReaderDailyPrice, fetchStooqDailyPrice]) {
     try {
       const dailyPrice = await provider(ticker);
       if (dailyPrice) {
@@ -205,7 +205,7 @@ async function fetchDailyPrice(ticker: string): Promise<DailyPrice | null> {
 }
 
 async function fetchHistoricalDailyPrice(ticker: string, startDate: string, endDate: string): Promise<DailyPrice[]> {
-  for (const provider of [fetchStooqHistoricalDailyPrice, fetchYahooHistoricalDailyPrice, fetchYahooViaReaderHistoricalDailyPrice]) {
+  for (const provider of [fetchYahooHistoricalDailyPrice, fetchYahooViaReaderHistoricalDailyPrice, fetchStooqHistoricalDailyPrice]) {
     try {
       const prices = await provider(ticker, startDate, endDate);
       if (prices.length > 0) {
