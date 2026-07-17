@@ -190,7 +190,12 @@ async function fetchDailyPrices(tickers: string[]): Promise<Map<string, DailyPri
 }
 
 async function fetchDailyPrice(ticker: string): Promise<DailyPrice | null> {
-  for (const provider of [fetchYahooDailyPrice, fetchYahooViaReaderDailyPrice, fetchStooqDailyPrice]) {
+  for (const provider of [
+    fetchYahooProxyDailyPrice,
+    fetchYahooDailyPrice,
+    fetchYahooViaReaderDailyPrice,
+    fetchStooqDailyPrice,
+  ]) {
     try {
       const dailyPrice = await provider(ticker);
       if (dailyPrice) {
@@ -205,7 +210,12 @@ async function fetchDailyPrice(ticker: string): Promise<DailyPrice | null> {
 }
 
 async function fetchHistoricalDailyPrice(ticker: string, startDate: string, endDate: string): Promise<DailyPrice[]> {
-  for (const provider of [fetchYahooHistoricalDailyPrice, fetchYahooViaReaderHistoricalDailyPrice, fetchStooqHistoricalDailyPrice]) {
+  for (const provider of [
+    fetchYahooProxyHistoricalDailyPrice,
+    fetchYahooHistoricalDailyPrice,
+    fetchYahooViaReaderHistoricalDailyPrice,
+    fetchStooqHistoricalDailyPrice,
+  ]) {
     try {
       const prices = await provider(ticker, startDate, endDate);
       if (prices.length > 0) {
@@ -217,6 +227,32 @@ async function fetchHistoricalDailyPrice(ticker: string, startDate: string, endD
   }
 
   return [];
+}
+
+async function fetchYahooProxyDailyPrice(ticker: string): Promise<DailyPrice | null> {
+  const response = await fetch(yahooProxyUrl(ticker));
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as YahooChartResponse;
+  return parseYahooDailyPrice(ticker, payload, "Yahoo");
+}
+
+async function fetchYahooProxyHistoricalDailyPrice(
+  ticker: string,
+  startDate: string,
+  endDate: string,
+): Promise<DailyPrice[]> {
+  const response = await fetch(yahooProxyUrl(ticker, startDate, endDate));
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = (await response.json()) as YahooChartResponse;
+  return parseYahooDailyPriceHistory(ticker, payload, "Yahoo", startDate, endDate);
 }
 
 async function fetchYahooDailyPrice(ticker: string): Promise<DailyPrice | null> {
@@ -242,7 +278,7 @@ async function fetchYahooHistoricalDailyPrice(ticker: string, startDate: string,
 }
 
 async function fetchYahooViaReaderDailyPrice(ticker: string): Promise<DailyPrice | null> {
-  const response = await fetch(`https://r.jina.ai/http://r.jina.ai/http://${yahooChartUrl(ticker)}`);
+  const response = await fetch(`https://r.jina.ai/${yahooChartUrl(ticker)}`);
 
   if (!response.ok) {
     return null;
@@ -267,7 +303,7 @@ async function fetchYahooViaReaderHistoricalDailyPrice(
   startDate: string,
   endDate: string,
 ): Promise<DailyPrice[]> {
-  const response = await fetch(`https://r.jina.ai/http://r.jina.ai/http://${yahooChartHistoryUrl(ticker, startDate, endDate)}`);
+  const response = await fetch(`https://r.jina.ai/${yahooChartHistoryUrl(ticker, startDate, endDate)}`);
 
   if (!response.ok) {
     return [];
@@ -360,6 +396,27 @@ function yahooChartUrl(ticker: string): string {
   return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=10d&interval=1d`;
 }
 
+function yahooProxyUrl(ticker: string, startDate?: string, endDate?: string): string {
+  const productionOrigin = "https://mio-portafoglio.vercel.app";
+  const currentOrigin =
+    typeof window !== "undefined" && /^https?:$/.test(window.location.protocol) && !isLocalDevelopmentHost(window.location.hostname)
+      ? window.location.origin
+      : productionOrigin;
+  const url = new URL("/api/yahoo", currentOrigin);
+
+  url.searchParams.set("ticker", ticker);
+  if (startDate && endDate) {
+    url.searchParams.set("start", startDate);
+    url.searchParams.set("end", endDate);
+  }
+
+  return url.toString();
+}
+
+function isLocalDevelopmentHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
 function stooqDailyUrl(ticker: string, startDate?: string, endDate?: string): string {
   const params = new URLSearchParams({
     s: `${ticker.toLowerCase()}.us`,
@@ -398,7 +455,7 @@ function parseYahooDailyPrice(ticker: string, payload: YahooChartResponse, sourc
         ticker,
         open: roundPrice(open),
         close: roundPrice(close),
-        date: new Date(timestamps[index] * 1000).toISOString().slice(0, 10),
+        date: yahooDateKey(timestamps[index]),
         source,
       };
     }
@@ -420,14 +477,15 @@ function parseYahooDailyPriceHistory(
   const opens = quote?.open ?? [];
   const closes = quote?.close ?? [];
   const prices: DailyPrice[] = [];
+  const pricesByDate = new Map<string, DailyPrice>();
 
   for (let index = 0; index < timestamps.length; index += 1) {
     const open = opens[index];
     const close = closes[index];
-    const date = new Date(timestamps[index] * 1000).toISOString().slice(0, 10);
+    const date = yahooDateKey(timestamps[index]);
 
     if (typeof open === "number" && typeof close === "number" && date >= startDate && date <= endDate) {
-      prices.push({
+      pricesByDate.set(date, {
         ticker,
         open: roundPrice(open),
         close: roundPrice(close),
@@ -437,5 +495,15 @@ function parseYahooDailyPriceHistory(
     }
   }
 
+  prices.push(...Array.from(pricesByDate.values()).sort((first, second) => first.date.localeCompare(second.date)));
   return prices;
+}
+
+function yahooDateKey(timestamp: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(timestamp * 1000));
 }

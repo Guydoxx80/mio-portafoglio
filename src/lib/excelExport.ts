@@ -89,6 +89,10 @@ async function buildHistoricalSnapshots(trades: Trade[], year: string): Promise<
   for (const trade of openTrades) {
     const prices = history.get(trade.ticker) ?? [];
     for (const price of prices) {
+      if (price.date < trade.openDate.slice(0, 10)) {
+        continue;
+      }
+
       const profitLoss = calculateProfitLoss(trade.entryPrice, price.close, trade.quantity);
       snapshots.push({
         snapshotDate: price.date,
@@ -116,20 +120,38 @@ async function buildHistoricalSnapshots(trades: Trade[], year: string): Promise<
 }
 
 function mergeSnapshots(primarySnapshots: PortfolioSnapshot[], backfillSnapshots: PortfolioSnapshot[]): PortfolioSnapshot[] {
-  const mergedSnapshots = new Map(backfillSnapshots.map((snapshot) => [snapshotKey(snapshot), snapshot]));
+  const mergedSnapshots = new Map(primarySnapshots.map((snapshot) => [snapshotKey(snapshot), snapshot]));
 
-  for (const snapshot of primarySnapshots) {
-    mergedSnapshots.set(snapshotKey(snapshot), snapshot);
+  for (const snapshot of backfillSnapshots) {
+    const key = snapshotKey(snapshot);
+    const existingSnapshot = mergedSnapshots.get(key);
+
+    mergedSnapshots.set(key, {
+      ...snapshot,
+      ...existingSnapshot,
+      currentPrice: snapshot.currentPrice,
+      dailyOpen: snapshot.dailyOpen,
+      dailyClose: snapshot.dailyClose,
+      dailyPriceDate: snapshot.dailyPriceDate,
+      profitLossEuro: snapshot.profitLossEuro,
+      profitLossPercent: snapshot.profitLossPercent,
+    });
   }
 
   return Array.from(mergedSnapshots.values());
 }
 
-function buildSnapshots(trades: Trade[], snapshotDate: string): PortfolioSnapshot[] {
+function buildSnapshots(trades: Trade[], fallbackSnapshotDate: string): PortfolioSnapshot[] {
   return trades
     .filter((trade) => trade.status === "open")
     .map((trade) => {
       const profitLoss = calculateProfitLoss(trade.entryPrice, trade.currentPrice, trade.quantity);
+      const hasDatedDailyPrice =
+        typeof trade.dailyPriceDate === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(trade.dailyPriceDate) &&
+        typeof trade.dailyOpen === "number" &&
+        typeof trade.dailyClose === "number";
+      const snapshotDate = hasDatedDailyPrice ? trade.dailyPriceDate! : fallbackSnapshotDate;
 
       return {
         snapshotDate,
@@ -139,9 +161,9 @@ function buildSnapshots(trades: Trade[], snapshotDate: string): PortfolioSnapsho
         quantity: trade.quantity,
         entryPrice: trade.entryPrice,
         currentPrice: trade.currentPrice,
-        dailyOpen: trade.dailyOpen,
-        dailyClose: trade.dailyClose,
-        dailyPriceDate: trade.dailyPriceDate,
+        dailyOpen: hasDatedDailyPrice ? trade.dailyOpen : undefined,
+        dailyClose: hasDatedDailyPrice ? trade.dailyClose : undefined,
+        dailyPriceDate: hasDatedDailyPrice ? trade.dailyPriceDate : undefined,
         stopLoss: trade.stopLoss,
         riskEuro: trade.riskEuro,
         riskPercent: trade.riskPercent,
@@ -240,9 +262,11 @@ function buildPositionRow(
   ];
   const dailyCells = dates.flatMap((date) => {
     const snapshot = snapshotsByPositionAndDate.get(`${positionKey(position)}|${date}`);
+    const hasMatchingMarketDate = snapshot?.dailyPriceDate === date;
+
     return [
-      optionalNumberCell(snapshot?.dailyOpen, "Money"),
-      optionalNumberCell(snapshot?.dailyClose, "Money"),
+      optionalNumberCell(hasMatchingMarketDate ? snapshot.dailyOpen : undefined, "Money"),
+      optionalNumberCell(hasMatchingMarketDate ? snapshot.dailyClose : undefined, "Money"),
     ];
   });
 
