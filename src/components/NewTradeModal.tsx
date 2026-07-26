@@ -22,7 +22,7 @@ type NewTradeModalProps = {
 
 type FieldErrors = Partial<Record<"ticker" | "entryPrice" | "stopLoss" | "quantity", string>>;
 
-const presetPercentages = [100, 80, 60, 40, 30, 20, 10];
+const presetPercentages = [20, 50, 100, 200, 300, 400, 500];
 
 function numberFromInput(value: string): number {
   const normalizedValue = value.replace(",", ".");
