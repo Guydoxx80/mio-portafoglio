@@ -206,6 +206,7 @@ function buildWorkbookXml(year: string, snapshots: PortfolioSnapshot[]): string 
   <Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#E5E7EB" ss:Pattern="Solid"/></Style>
   <Style ss:ID="DateHeader"><Font ss:Bold="1"/><Alignment ss:Horizontal="Center"/><Interior ss:Color="#F3F4F6" ss:Pattern="Solid"/></Style>
   <Style ss:ID="Money"><NumberFormat ss:Format="&quot;$&quot;#,##0.00"/></Style>
+  <Style ss:ID="MoneyStopLoss"><NumberFormat ss:Format="&quot;$&quot;#,##0.00"/><Font ss:Color="#B91C1C"/><Interior ss:Color="#FEE2E2" ss:Pattern="Solid"/></Style>
   <Style ss:ID="Number"><NumberFormat ss:Format="#,##0.00"/></Style>
  </Styles>
  ${sheets.join("\n")}
@@ -263,18 +264,20 @@ function buildPositionRow(
   const dailyCells = dates.flatMap((date) => {
     const snapshot = snapshotsByPositionAndDate.get(`${positionKey(position)}|${date}`);
     const hasMatchingMarketDate = snapshot?.dailyPriceDate === date;
+    const dailyOpen = hasMatchingMarketDate ? snapshot.dailyOpen : undefined;
+    const dailyClose = hasMatchingMarketDate ? snapshot.dailyClose : undefined;
 
     return [
-      optionalNumberCell(hasMatchingMarketDate ? snapshot.dailyOpen : undefined, "Money"),
-      optionalNumberCell(hasMatchingMarketDate ? snapshot.dailyClose : undefined, "Money"),
+      optionalNumberCell(dailyOpen, dailyOpen !== undefined && dailyOpen <= position.stopLoss),
+      optionalNumberCell(dailyClose, dailyClose !== undefined && dailyClose <= position.stopLoss),
     ];
   });
 
   return `<Row>${baseCells.join("")}${dailyCells.join("")}</Row>`;
 }
 
-function optionalNumberCell(value: number | undefined, style: string): string {
-  return typeof value === "number" ? cell(value, "Number", style) : cell("");
+function optionalNumberCell(value: number | undefined, isAtOrBelowStopLoss: boolean): string {
+  return typeof value === "number" ? cell(value, "Number", isAtOrBelowStopLoss ? "MoneyStopLoss" : "Money") : cell("");
 }
 
 function cell(
