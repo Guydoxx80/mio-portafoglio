@@ -6,6 +6,7 @@ import type { TakeProfitLevel } from "../types";
 const presetPercentages = [20, 50, 100, 200, 300, 400, 500];
 
 type TakeProfitSelectorProps = {
+  entryPrice: number;
   selectedPercentages: number[];
   customLevels: TakeProfitLevel[];
   onSelectedPercentagesChange: (values: number[]) => void;
@@ -13,12 +14,17 @@ type TakeProfitSelectorProps = {
 };
 
 export function TakeProfitSelector({
+  entryPrice,
   selectedPercentages,
   customLevels,
   onSelectedPercentagesChange,
   onCustomLevelsChange,
 }: TakeProfitSelectorProps) {
   const [customPrice, setCustomPrice] = useState("");
+  const formatTargetPrice = (percentage: number): string =>
+    Number.isFinite(entryPrice) && entryPrice > 0
+      ? ` $${(entryPrice * (1 + percentage / 100)).toFixed(2)}`
+      : "";
 
   function togglePercentage(percentage: number): void {
     if (selectedPercentages.includes(percentage)) {
@@ -51,18 +57,24 @@ export function TakeProfitSelector({
     <div className="space-y-3">
       <div className="space-y-1.5">
         {presetPercentages.map((percentage) => (
-          <label
-            key={percentage}
-            className="flex h-8 items-center gap-2 rounded-md bg-slate-50 px-2 text-xs font-semibold text-ink"
-          >
-            <input
-              checked={selectedPercentages.includes(percentage)}
-              className="h-3.5 w-3.5 rounded border-line text-blue-600 focus:ring-blue-500"
-              onChange={() => togglePercentage(percentage)}
-              type="checkbox"
-            />
-            {percentage}%
-          </label>
+          (() => {
+            const targetPrice = formatTargetPrice(percentage);
+
+            return (
+              <label
+                key={percentage}
+                className="flex h-8 items-center gap-2 rounded-md bg-slate-50 px-2 text-xs font-semibold text-ink"
+              >
+                <input
+                  checked={selectedPercentages.includes(percentage)}
+                  className="h-3.5 w-3.5 rounded border-line text-blue-600 focus:ring-blue-500"
+                  onChange={() => togglePercentage(percentage)}
+                  type="checkbox"
+                />
+                {percentage}%{targetPrice && ` →${targetPrice}`}
+              </label>
+            );
+          })()
         ))}
       </div>
 

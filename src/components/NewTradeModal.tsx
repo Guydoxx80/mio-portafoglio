@@ -284,6 +284,7 @@ export function NewTradeModal({
 
           <Field label="Take Profit Levels *">
             <TakeProfitSelector
+              entryPrice={entryPriceValue}
               customLevels={customLevels}
               onCustomLevelsChange={setCustomLevels}
               onSelectedPercentagesChange={setSelectedPercentages}
