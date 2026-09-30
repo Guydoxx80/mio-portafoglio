@@ -50,6 +50,16 @@ body {
   background-color: rgba(49, 46, 129, 0.26) !important;
 }
 
+.theme-dark .risk-summary-card {
+  background-color: #111827;
+  border-color: #334155;
+}
+
+.theme-dark .risk-summary-card span,
+.theme-dark .risk-summary-card strong {
+  color: #f8fafc !important;
+}
+
 .theme-dark .border-line,
 .theme-dark .border-line\/70 {
   border-color: #334155 !important;

@@ -8,7 +8,7 @@ type RiskSummaryCardProps = {
 
 export function RiskSummaryCard({ riskPercent, riskEuro, quantity }: RiskSummaryCardProps) {
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+    <div className="risk-summary-card rounded-lg border border-blue-200 bg-blue-50 p-3">
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="text-slate-600">Percentuale:</span>
         <strong className="text-lg text-blue-700">{riskPercent.toFixed(1)}%</strong>
