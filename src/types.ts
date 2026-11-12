@@ -2,7 +2,8 @@ export type Strategy =
   | "Strategia Volumi"
   | "Cryptocurrencies"
   | "Lungo Termine"
-  | "Speculativo";
+  | "Speculativo"
+  | "Trading Buster";
 
 export type Sector =
   | "Technology"

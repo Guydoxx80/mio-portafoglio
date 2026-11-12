@@ -17,6 +17,7 @@ export function StrategySelect({ value, onChange }: StrategySelectProps) {
           {strategy}
         </option>
       ))}
+      <option value="Trading Buster">Trading Buster</option>
     </select>
   );
 }
